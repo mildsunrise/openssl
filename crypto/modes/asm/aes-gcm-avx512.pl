@@ -2809,6 +2809,7 @@ sub GHASH_16_ENCRYPT_16_PARALLEL {
   my $DATA_DISPL         = $_[40];    # [in] fixed numerical data displacement/offset
   my $GHASH_IN           = $_[41];    # [in] current GHASH value or "no_ghash_in"
   my $IA0                = $_[42];    # [clobbered] temporary GPR
+  my $GCM128_CTX         = $_[43];
 
   my $B00_03 = $ZT1;
   my $B04_07 = $ZT2;
@@ -3711,7 +3712,7 @@ ___
     $ZTMP14,   $ZTMP15,         $ZTMP16,         $ZTMP17,      $ZTMP18,             $ZTMP19,
     $ZTMP20,   $ZTMP21,         $ZTMP22,         $ADDBE_4x4,   $ADDBE_1234,         $GL,
     $GH,       $GM,             "first_time",    $ENC_DEC,     $data_in_out_offset, $AAD_HASHz,
-    $IA0);
+    $IA0, $GCM128_CTX);
 
   # ;; ==== AES-CTR + GHASH - 16 blocks, no reduction
   $aesout_offset      = ($STACK_LOCAL_OFFSET + (0 * 16));
@@ -3725,7 +3726,7 @@ ___
     $ZTMP14,   $ZTMP15,         $ZTMP16,         $ZTMP17,      $ZTMP18,             $ZTMP19,
     $ZTMP20,   $ZTMP21,         $ZTMP22,         $ADDBE_4x4,   $ADDBE_1234,         $GL,
     $GH,       $GM,             "no_reduction",  $ENC_DEC,     $data_in_out_offset, "no_ghash_in",
-    $IA0);
+    $IA0, $GCM128_CTX);
 
   # ;; ==== AES-CTR + GHASH - 16 blocks, reduction
   $aesout_offset      = ($STACK_LOCAL_OFFSET + (16 * 16));
@@ -3739,7 +3740,7 @@ ___
     $ZTMP14,   $ZTMP15,         $ZTMP16,           $ZTMP17,      $ZTMP18,             $ZTMP19,
     $ZTMP20,   $ZTMP21,         $ZTMP22,           $ADDBE_4x4,   $ADDBE_1234,         $GL,
     $GH,       $GM,             "final_reduction", $ENC_DEC,     $data_in_out_offset, "no_ghash_in",
-    $IA0);
+    $IA0, $GCM128_CTX);
 
   # ;; === xor cipher block 0 with GHASH (ZT4)
   $code .= <<___;
@@ -3815,7 +3816,7 @@ ___
     $ZTMP14,   $ZTMP15,         $ZTMP16,         $ZTMP17,      $ZTMP18,             $ZTMP19,
     $ZTMP20,   $ZTMP21,         $ZTMP22,         $ADDBE_4x4,   $ADDBE_1234,         $GL,
     $GH,       $GM,             "first_time",    $ENC_DEC,     $data_in_out_offset, $AAD_HASHz,
-    $IA0);
+    $IA0, $GCM128_CTX);
 
   # ;; ==== AES-CTR + GHASH - 16 blocks, no reduction
   $aesout_offset  = ($STACK_LOCAL_OFFSET + (0 * 16));
@@ -3829,7 +3830,7 @@ ___
     $ZTMP14,   $ZTMP15,         $ZTMP16,         $ZTMP17,      $ZTMP18,             $ZTMP19,
     $ZTMP20,   $ZTMP21,         $ZTMP22,         $ADDBE_4x4,   $ADDBE_1234,         $GL,
     $GH,       $GM,             "no_reduction",  $ENC_DEC,     $data_in_out_offset, "no_ghash_in",
-    $IA0);
+    $IA0, $GCM128_CTX);
 
   # ;; ==== GHASH 16 blocks with reduction
   &GHASH_16(
@@ -3884,7 +3885,7 @@ ___
     $ZTMP14,   $ZTMP15,         $ZTMP16,         $ZTMP17,      $ZTMP18,             $ZTMP19,
     $ZTMP20,   $ZTMP21,         $ZTMP22,         $ADDBE_4x4,   $ADDBE_1234,         $GL,
     $GH,       $GM,             "first_time",    $ENC_DEC,     $data_in_out_offset, $AAD_HASHz,
-    $IA0);
+    $IA0, $GCM128_CTX);
 
   # ;; ==== GHASH 1 x 16 blocks
   &GHASH_16(
