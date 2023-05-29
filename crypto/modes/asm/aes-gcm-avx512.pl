@@ -81,10 +81,10 @@ if ($avx512vaes>0) { #<<<
 
 $code .= <<___;
 .extern OPENSSL_ia32cap_P
-.globl  ossl_vaes_vpclmulqdq_capable
-.type   ossl_vaes_vpclmulqdq_capable,\@abi-omnipotent
+.globl  AesGcmSrtpBackend_asm_vpclmulqdq_capable
+.type   AesGcmSrtpBackend_asm_vpclmulqdq_capable,\@abi-omnipotent
 .align 32
-ossl_vaes_vpclmulqdq_capable:
+AesGcmSrtpBackend_asm_vpclmulqdq_capable:
     mov OPENSSL_ia32cap_P+8(%rip), %rcx
     # avx512vpclmulqdq + avx512vaes + avx512vl + avx512bw + avx512dq + avx512f
     mov \$`1<<42|1<<41|1<<31|1<<30|1<<17|1<<16`,%rdx
@@ -93,7 +93,7 @@ ossl_vaes_vpclmulqdq_capable:
     cmp %rdx,%rcx
     cmove %rcx,%rax
     ret
-.size   ossl_vaes_vpclmulqdq_capable, .-ossl_vaes_vpclmulqdq_capable
+.size   AesGcmSrtpBackend_asm_vpclmulqdq_capable, .-AesGcmSrtpBackend_asm_vpclmulqdq_capable
 ___
 
 # ; Mapping key length -> AES rounds count
@@ -4309,7 +4309,7 @@ ___
 $code .= ".text\n";
 {
   # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  # ;void   ossl_aes_gcm_init_avx512 /
+  # ;void   AesGcmSrtpBackend_asm_init_avx512 /
   # ;       (const void *aes_keys,
   # ;        void *gcm128ctx)
   # ;
@@ -4317,10 +4317,10 @@ $code .= ".text\n";
   # ; Leaf function (does not allocate stack space, does not use non-volatile registers).
   # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   $code .= <<___;
-.globl ossl_aes_gcm_init_avx512
-.type ossl_aes_gcm_init_avx512,\@abi-omnipotent
+.globl AesGcmSrtpBackend_asm_init_avx512
+.type AesGcmSrtpBackend_asm_init_avx512,\@abi-omnipotent
 .align 32
-ossl_aes_gcm_init_avx512:
+AesGcmSrtpBackend_asm_init_avx512:
 .cfi_startproc
         endbranch
 ___
@@ -4366,12 +4366,12 @@ ___
 .Labort_init:
 ret
 .cfi_endproc
-.size ossl_aes_gcm_init_avx512, .-ossl_aes_gcm_init_avx512
+.size AesGcmSrtpBackend_asm_init_avx512, .-AesGcmSrtpBackend_asm_init_avx512
 ___
 }
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-# ;void   ossl_aes_gcm_setiv_avx512
+# ;void   AesGcmSrtpBackend_asm_setiv_avx512
 # ;       (const void *aes_keys,
 # ;        void *gcm128ctx,
 # ;        const unsigned char *iv,
@@ -4380,10 +4380,10 @@ ___
 # ; Computes E(K,Y0) for finalization, updates current counter Yi in gcm128_context structure.
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 $code .= <<___;
-.globl ossl_aes_gcm_setiv_avx512
-.type ossl_aes_gcm_setiv_avx512,\@abi-omnipotent
+.globl AesGcmSrtpBackend_asm_setiv_avx512
+.type AesGcmSrtpBackend_asm_setiv_avx512,\@abi-omnipotent
 .align 32
-ossl_aes_gcm_setiv_avx512:
+AesGcmSrtpBackend_asm_setiv_avx512:
 .cfi_startproc
 .Lsetiv_seh_begin:
         endbranch
@@ -4425,11 +4425,11 @@ $code .= <<___;
 ret
 .Lsetiv_seh_end:
 .cfi_endproc
-.size ossl_aes_gcm_setiv_avx512, .-ossl_aes_gcm_setiv_avx512
+.size AesGcmSrtpBackend_asm_setiv_avx512, .-AesGcmSrtpBackend_asm_setiv_avx512
 ___
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-# ;void ossl_aes_gcm_update_aad_avx512
+# ;void AesGcmSrtpBackend_asm_update_aad_avx512
 # ;     (unsigned char *gcm128ctx,
 # ;      const unsigned char *aad,
 # ;      size_t aadlen)
@@ -4437,10 +4437,10 @@ ___
 # ; Updates AAD hash in gcm128_context structure.
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 $code .= <<___;
-.globl ossl_aes_gcm_update_aad_avx512
-.type ossl_aes_gcm_update_aad_avx512,\@abi-omnipotent
+.globl AesGcmSrtpBackend_asm_update_aad_avx512
+.type AesGcmSrtpBackend_asm_update_aad_avx512,\@abi-omnipotent
 .align 32
-ossl_aes_gcm_update_aad_avx512:
+AesGcmSrtpBackend_asm_update_aad_avx512:
 .cfi_startproc
 .Lghash_seh_begin:
         endbranch
@@ -4478,11 +4478,11 @@ $code .= <<___;
 ret
 .Lghash_seh_end:
 .cfi_endproc
-.size ossl_aes_gcm_update_aad_avx512, .-ossl_aes_gcm_update_aad_avx512
+.size AesGcmSrtpBackend_asm_update_aad_avx512, .-AesGcmSrtpBackend_asm_update_aad_avx512
 ___
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-# ;void   ossl_aes_gcm_encrypt_avx512
+# ;void   AesGcmSrtpBackend_asm_encrypt_avx512
 # ;       (const void* aes_keys,
 # ;        void *gcm128ctx,
 # ;        unsigned int *pblocklen,
@@ -4494,10 +4494,10 @@ ___
 # ; Stores encrypted partial block (if any) in gcm128ctx and its length in |pblocklen|.
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 $code .= <<___;
-.globl ossl_aes_gcm_encrypt_avx512
-.type ossl_aes_gcm_encrypt_avx512,\@abi-omnipotent
+.globl AesGcmSrtpBackend_asm_encrypt_avx512
+.type AesGcmSrtpBackend_asm_encrypt_avx512,\@abi-omnipotent
 .align 32
-ossl_aes_gcm_encrypt_avx512:
+AesGcmSrtpBackend_asm_encrypt_avx512:
 .cfi_startproc
 .Lencrypt_seh_begin:
         endbranch
@@ -4563,11 +4563,11 @@ $code .= <<___;
 ret
 .Lencrypt_seh_end:
 .cfi_endproc
-.size ossl_aes_gcm_encrypt_avx512, .-ossl_aes_gcm_encrypt_avx512
+.size AesGcmSrtpBackend_asm_encrypt_avx512, .-AesGcmSrtpBackend_asm_encrypt_avx512
 ___
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-# ;void   ossl_aes_gcm_decrypt_avx512
+# ;void   AesGcmSrtpBackend_asm_decrypt_avx512
 # ;       (const void* keys,
 # ;        void *gcm128ctx,
 # ;        unsigned int *pblocklen,
@@ -4579,10 +4579,10 @@ ___
 # ; Stores decrypted partial block (if any) in gcm128ctx and its length in |pblocklen|.
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 $code .= <<___;
-.globl ossl_aes_gcm_decrypt_avx512
-.type ossl_aes_gcm_decrypt_avx512,\@abi-omnipotent
+.globl AesGcmSrtpBackend_asm_decrypt_avx512
+.type AesGcmSrtpBackend_asm_decrypt_avx512,\@abi-omnipotent
 .align 32
-ossl_aes_gcm_decrypt_avx512:
+AesGcmSrtpBackend_asm_decrypt_avx512:
 .cfi_startproc
 .Ldecrypt_seh_begin:
         endbranch
@@ -4648,11 +4648,11 @@ $code .= <<___;
 ret
 .Ldecrypt_seh_end:
 .cfi_endproc
-.size ossl_aes_gcm_decrypt_avx512, .-ossl_aes_gcm_decrypt_avx512
+.size AesGcmSrtpBackend_asm_decrypt_avx512, .-AesGcmSrtpBackend_asm_decrypt_avx512
 ___
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-# ;void   ossl_aes_gcm_finalize_vaes_avx512
+# ;void   AesGcmSrtpBackend_asm_finalize_vaes_avx512
 # ;       (void *gcm128ctx,
 # ;       unsigned int pblocklen);
 # ;
@@ -4660,10 +4660,10 @@ ___
 # ; Leaf function (does not allocate stack space, does not use non-volatile registers).
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 $code .= <<___;
-.globl ossl_aes_gcm_finalize_avx512
-.type ossl_aes_gcm_finalize_avx512,\@abi-omnipotent
+.globl AesGcmSrtpBackend_asm_finalize_avx512
+.type AesGcmSrtpBackend_asm_finalize_avx512,\@abi-omnipotent
 .align 32
-ossl_aes_gcm_finalize_avx512:
+AesGcmSrtpBackend_asm_finalize_avx512:
 .cfi_startproc
         endbranch
 ___
@@ -4681,21 +4681,21 @@ $code .= <<___;
 .Labort_finalize:
 ret
 .cfi_endproc
-.size ossl_aes_gcm_finalize_avx512, .-ossl_aes_gcm_finalize_avx512
+.size AesGcmSrtpBackend_asm_finalize_avx512, .-AesGcmSrtpBackend_asm_finalize_avx512
 ___
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-# ;void ossl_gcm_gmult_avx512(u64 Xi[2],
+# ;void AesGcmSrtpBackend_asm_gmult_avx512(u64 Xi[2],
 # ;                           const void* gcm128ctx)
 # ;
 # ; Leaf function (does not allocate stack space, does not use non-volatile registers).
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 $code .= <<___;
-.globl ossl_gcm_gmult_avx512
-.hidden ossl_gcm_gmult_avx512
-.type ossl_gcm_gmult_avx512,\@abi-omnipotent
+.globl AesGcmSrtpBackend_asm_gmult_avx512
+.hidden AesGcmSrtpBackend_asm_gmult_avx512
+.type AesGcmSrtpBackend_asm_gmult_avx512,\@abi-omnipotent
 .align 32
-ossl_gcm_gmult_avx512:
+AesGcmSrtpBackend_asm_gmult_avx512:
 .cfi_startproc
         endbranch
 ___
@@ -4726,7 +4726,7 @@ $code .= <<___;
 .Labort_gmult:
 ret
 .cfi_endproc
-.size ossl_gcm_gmult_avx512, .-ossl_gcm_gmult_avx512
+.size AesGcmSrtpBackend_asm_gmult_avx512, .-AesGcmSrtpBackend_asm_gmult_avx512
 ___
 
 if ($win64) {
@@ -4947,36 +4947,7 @@ byte64_len_to_mask_table:
 ___
 
 } else {
-# Fallback for old assembler
-$code .= <<___;
-.text
-.globl  ossl_vaes_vpclmulqdq_capable
-.type   ossl_vaes_vpclmulqdq_capable,\@abi-omnipotent
-ossl_vaes_vpclmulqdq_capable:
-    xor     %eax,%eax
-    ret
-.size   ossl_vaes_vpclmulqdq_capable, .-ossl_vaes_vpclmulqdq_capable
-
-.globl ossl_aes_gcm_init_avx512
-.globl ossl_aes_gcm_setiv_avx512
-.globl ossl_aes_gcm_update_aad_avx512
-.globl ossl_aes_gcm_encrypt_avx512
-.globl ossl_aes_gcm_decrypt_avx512
-.globl ossl_aes_gcm_finalize_avx512
-.globl ossl_gcm_gmult_avx512
-
-.type ossl_aes_gcm_init_avx512,\@abi-omnipotent
-ossl_aes_gcm_init_avx512:
-ossl_aes_gcm_setiv_avx512:
-ossl_aes_gcm_update_aad_avx512:
-ossl_aes_gcm_encrypt_avx512:
-ossl_aes_gcm_decrypt_avx512:
-ossl_aes_gcm_finalize_avx512:
-ossl_gcm_gmult_avx512:
-    .byte   0x0f,0x0b    # ud2
-    ret
-.size   ossl_aes_gcm_init_avx512, .-ossl_aes_gcm_init_avx512
-___
+die "assembler does not support AVX512";
 }
 
 $code =~ s/\`([^\`]*)\`/eval $1/gem;
