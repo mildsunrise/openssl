@@ -121,7 +121,6 @@ my $CHECK_FUNCTION_ARGUMENTS = 0;
 my $AES_BLOCK_SIZE = 16;
 
 # Storage capacity in elements
-my $HKEYS_STORAGE_CAPACITY = 48;
 my $LOCAL_STORAGE_CAPACITY = 48;
 my $HKEYS_CONTEXT_CAPACITY = 48;
 
@@ -286,29 +285,16 @@ sub EffectiveAddress {
 # ; Provides memory location of corresponding HashKey power
 sub HashKeyByIdx {
   my ($idx, $base) = @_;
-  my $base_str = ($base eq "%rsp") ? "frame" : "context";
-
-  my $offset = &HashKeyOffsetByIdx($idx, $base_str);
+  my $offset = &HashKeyOffsetByIdx($idx);
   return "$offset($base)";
 }
 
 # ; Provides offset (in bytes) of corresponding HashKey power from the highest key in the storage
 sub HashKeyOffsetByIdx {
-  my ($idx, $base) = @_;
-  die "HashKeyOffsetByIdx: base should be either 'frame' or 'context'; base = $base"
-    if (($base ne "frame") && ($base ne "context"));
-
-  my $offset_base;
-  my $offset_idx;
-  if ($base eq "frame") {    # frame storage
-    die "HashKeyOffsetByIdx: idx out of bounds (1..48)! idx = $idx\n" if ($idx > $HKEYS_STORAGE_CAPACITY || $idx < 1);
-    $offset_base = $STACK_HKEYS_OFFSET;
-    $offset_idx  = ($AES_BLOCK_SIZE * ($HKEYS_STORAGE_CAPACITY - $idx));
-  } else {                   # context storage
-    die "HashKeyOffsetByIdx: idx out of bounds (1..16)! idx = $idx\n" if ($idx > $HKEYS_CONTEXT_CAPACITY || $idx < 1);
-    $offset_base = $CTX_OFFSET_HTable;
-    $offset_idx  = ($AES_BLOCK_SIZE * ($HKEYS_CONTEXT_CAPACITY - $idx));
-  }
+  my ($idx) = @_;
+  die "HashKeyOffsetByIdx: idx out of bounds (1..48)! idx = $idx\n" if ($idx > $HKEYS_CONTEXT_CAPACITY || $idx < 1);
+  my $offset_base = $CTX_OFFSET_HTable;
+  my $offset_idx  = ($AES_BLOCK_SIZE * ($HKEYS_CONTEXT_CAPACITY - $idx));
   return $offset_base + $offset_idx;
 }
 
@@ -1318,8 +1304,8 @@ ___
 
   &GHASH_16(
     "start",        $ZT5,           $ZT6,           $ZT7,
-    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", "%rsp",
-    &HashKeyOffsetByIdx(48, "frame"), 0, "@{[ZWORD($AAD_HASH)]}", $ZT0,
+    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", $GCM128_CTX,
+    &HashKeyOffsetByIdx(48), 0, "@{[ZWORD($AAD_HASH)]}", $ZT0,
     $ZT8,     $ZT9,  $ZT10, $ZT11,
     $ZT12,    $ZT14, $ZT15, $ZT16,
     "NO_ZMM", $ZT1,  $ZT2,  $ZT3,
@@ -1338,8 +1324,8 @@ ___
 
   &GHASH_16(
     "mid",          $ZT5,           $ZT6,           $ZT7,
-    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", "%rsp",
-    &HashKeyOffsetByIdx(32, "frame"), 0, "NO_HASH_IN_OUT", $ZT0,
+    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", $GCM128_CTX,
+    &HashKeyOffsetByIdx(32), 0, "NO_HASH_IN_OUT", $ZT0,
     $ZT8,     $ZT9,  $ZT10, $ZT11,
     $ZT12,    $ZT14, $ZT15, $ZT16,
     "NO_ZMM", $ZT1,  $ZT2,  $ZT3,
@@ -1358,8 +1344,8 @@ ___
 
   &GHASH_16(
     "end_reduce",   $ZT5,           $ZT6,           $ZT7,
-    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", "%rsp",
-    &HashKeyOffsetByIdx(16, "frame"), 0, &ZWORD($AAD_HASH), $ZT0,
+    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", $GCM128_CTX,
+    &HashKeyOffsetByIdx(16), 0, &ZWORD($AAD_HASH), $ZT0,
     $ZT8,     $ZT9,  $ZT10, $ZT11,
     $ZT12,    $ZT14, $ZT15, $ZT16,
     "NO_ZMM", $ZT1,  $ZT2,  $ZT3,
@@ -1392,8 +1378,8 @@ ___
 
   &GHASH_16(
     "start",        $ZT5,           $ZT6,           $ZT7,
-    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", "%rsp",
-    &HashKeyOffsetByIdx(32, "frame"), 0, &ZWORD($AAD_HASH), $ZT0,
+    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", $GCM128_CTX,
+    &HashKeyOffsetByIdx(32), 0, &ZWORD($AAD_HASH), $ZT0,
     $ZT8,     $ZT9,  $ZT10, $ZT11,
     $ZT12,    $ZT14, $ZT15, $ZT16,
     "NO_ZMM", $ZT1,  $ZT2,  $ZT3,
@@ -1412,8 +1398,8 @@ ___
 
   &GHASH_16(
     "end_reduce",   $ZT5,           $ZT6,           $ZT7,
-    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", "%rsp",
-    &HashKeyOffsetByIdx(16, "frame"), 0, &ZWORD($AAD_HASH), $ZT0,
+    "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", $GCM128_CTX,
+    &HashKeyOffsetByIdx(16), 0, &ZWORD($AAD_HASH), $ZT0,
     $ZT8,     $ZT9,  $ZT10, $ZT11,
     $ZT12,    $ZT14, $ZT15, $ZT16,
     "NO_ZMM", $ZT1,  $ZT2,  $ZT3,
@@ -1445,7 +1431,7 @@ ___
   &GHASH_16(
     "start_reduce", $ZT5,           $ZT6,           $ZT7,
     "NO_INPUT_PTR", "NO_INPUT_PTR", "NO_INPUT_PTR", $GCM128_CTX,
-    &HashKeyOffsetByIdx(16, "context"), 0, &ZWORD($AAD_HASH), $ZT0,
+    &HashKeyOffsetByIdx(16), 0, &ZWORD($AAD_HASH), $ZT0,
     $ZT8,     $ZT9,  $ZT10, $ZT11,
     $ZT12,    $ZT14, $ZT15, $ZT16,
     "NO_ZMM", $ZT1,  $ZT2,  $ZT3,
@@ -2233,7 +2219,7 @@ ___
     $code .= "vmovdqa64         `$GHASHIN_BLK_OFFSET + (0*64)`(%rsp),$GHDAT1\n";
   }
 
-  $code .= "vmovdqu64         @{[EffectiveAddress(\"%rsp\",$HASHKEY_OFFSET,0*64)]},$GHKEY1\n";
+  $code .= "vmovdqu64         @{[EffectiveAddress($GCM128_CTX,$HASHKEY_OFFSET,0*64)]},$GHKEY1\n";
 
   # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   # ;; save counter for the next round
@@ -2253,7 +2239,7 @@ ___
         # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
         # ;; pre-load constants
         vbroadcastf64x2    `(16 * 1)`($AES_KEYS),$AESKEY2
-        vmovdqu64         @{[EffectiveAddress("%rsp",$HASHKEY_OFFSET,1*64)]},$GHKEY2
+        vmovdqu64         @{[EffectiveAddress($GCM128_CTX,$HASHKEY_OFFSET,1*64)]},$GHKEY2
         vmovdqa64         `$GHASHIN_BLK_OFFSET + (1*64)`(%rsp),$GHDAT2
 ___
 
@@ -2275,7 +2261,7 @@ ___
         vpclmulqdq        \$0x00,$GHKEY1,$GHDAT1,$GH1L      # ; a0*b0
         vpclmulqdq        \$0x01,$GHKEY1,$GHDAT1,$GH1M      # ; a1*b0
         vpclmulqdq        \$0x10,$GHKEY1,$GHDAT1,$GH1T      # ; a0*b1
-        vmovdqu64         @{[EffectiveAddress("%rsp",$HASHKEY_OFFSET,2*64)]},$GHKEY1
+        vmovdqu64         @{[EffectiveAddress($GCM128_CTX,$HASHKEY_OFFSET,2*64)]},$GHKEY1
         vmovdqa64         `$GHASHIN_BLK_OFFSET + (2*64)`(%rsp),$GHDAT1
 ___
 
@@ -2293,7 +2279,7 @@ ___
         vpclmulqdq        \$0x01,$GHKEY2,$GHDAT2,$GH2T      # ; a1*b0
         vpclmulqdq        \$0x11,$GHKEY2,$GHDAT2,$GH2H      # ; a1*b1
         vpclmulqdq        \$0x00,$GHKEY2,$GHDAT2,$GH2L      # ; a0*b0
-        vmovdqu64         @{[EffectiveAddress("%rsp",$HASHKEY_OFFSET,3*64)]},$GHKEY2
+        vmovdqu64         @{[EffectiveAddress($GCM128_CTX,$HASHKEY_OFFSET,3*64)]},$GHKEY2
         vmovdqa64         `$GHASHIN_BLK_OFFSET + (3*64)`(%rsp),$GHDAT2
 ___
 
@@ -2753,7 +2739,7 @@ ___
   }
 
   &GHASH_16($GHASH_TYPE, $TO_REDUCE_H, $TO_REDUCE_M, $TO_REDUCE_L, "%rsp",
-    $GHASHIN_BLK_OFFSET, 0, "%rsp", $HASHKEY_OFFSET, 0, $HASH_IN_OUT, $ZT00, $ZT01,
+    $GHASHIN_BLK_OFFSET, 0, $GCM128_CTX, $HASHKEY_OFFSET, 0, $HASH_IN_OUT, $ZT00, $ZT01,
     $ZT02, $ZT03, $ZT04, $ZT05, $ZT06, $ZT07, $ZT08, $ZT09);
 
   $code .= ".L_last_blocks_done_${rndsuffix}:\n";
@@ -2888,7 +2874,7 @@ ___
   }
 
   $code .= <<___;
-        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (0*4)),"%rsp")]},$GHKEY1
+        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (0*4)),$GCM128_CTX)]},$GHKEY1
 
         # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
         # ;; save counter for the next round
@@ -2898,7 +2884,7 @@ ___
         # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
         # ;; pre-load constants
         vbroadcastf64x2    `(16 * 1)`($AES_KEYS),$AESKEY2
-        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (1*4)),"%rsp")]},$GHKEY2
+        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (1*4)),$GCM128_CTX)]},$GHKEY2
         vmovdqa64         `$GHASHIN_BLK_OFFSET + (1*64)`(%rsp),$GHDAT2
 
         # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2919,7 +2905,7 @@ ___
         vpclmulqdq        \$0x00,$GHKEY1,$GHDAT1,$GH1L      # ; a0*b0
         vpclmulqdq        \$0x01,$GHKEY1,$GHDAT1,$GH1M      # ; a1*b0
         vpclmulqdq        \$0x10,$GHKEY1,$GHDAT1,$GH1T      # ; a0*b1
-        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (2*4)),"%rsp")]},$GHKEY1
+        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (2*4)),$GCM128_CTX)]},$GHKEY1
         vmovdqa64         `$GHASHIN_BLK_OFFSET + (2*64)`(%rsp),$GHDAT1
 
         # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2936,7 +2922,7 @@ ___
         vpclmulqdq        \$0x01,$GHKEY2,$GHDAT2,$GH2T      # ; a1*b0
         vpclmulqdq        \$0x11,$GHKEY2,$GHDAT2,$GH2H      # ; a1*b1
         vpclmulqdq        \$0x00,$GHKEY2,$GHDAT2,$GH2L      # ; a0*b0
-        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (3*4)),"%rsp")]},$GHKEY2
+        vmovdqu64         @{[HashKeyByIdx(($HASHKEY_OFFSET - (3*4)),$GCM128_CTX)]},$GHKEY2
         vmovdqa64         `$GHASHIN_BLK_OFFSET + (3*64)`(%rsp),$GHDAT2
 
         # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3771,13 +3757,13 @@ ___
   $code .= <<___;
 mov               @{[DWORD($LENGTH)]},@{[DWORD($IA0)]}
 and               \$~15,@{[DWORD($IA0)]}
-mov               \$`@{[HashKeyOffsetByIdx(32,"frame")]}`,@{[DWORD($HASHK_PTR)]}
+mov               \$`@{[HashKeyOffsetByIdx(32)]}`,@{[DWORD($HASHK_PTR)]}
 sub               @{[DWORD($IA0)]},@{[DWORD($HASHK_PTR)]}
 ___
 
   # ;; ==== GHASH 32 blocks and follow with reduction
   &GHASH_16("start", $GH, $GM, $GL, "%rsp", $STACK_LOCAL_OFFSET, (0 * 16),
-    "%rsp", $HASHK_PTR, 0, $AAD_HASHz, $ZTMP0, $ZTMP1, $ZTMP2, $ZTMP3, $ZTMP4, $ZTMP5, $ZTMP6, $ZTMP7, $ZTMP8, $ZTMP9);
+    $GCM128_CTX, $HASHK_PTR, 0, $AAD_HASHz, $ZTMP0, $ZTMP1, $ZTMP2, $ZTMP3, $ZTMP4, $ZTMP5, $ZTMP6, $ZTMP7, $ZTMP8, $ZTMP9);
 
   # ;; ==== GHASH 1 x 16 blocks with reduction + cipher and ghash on the reminder
   $ghashin_offset = ($STACK_LOCAL_OFFSET + (16 * 16));
@@ -3835,7 +3821,7 @@ ___
   # ;; ==== GHASH 16 blocks with reduction
   &GHASH_16(
     "end_reduce", $GH, $GM, $GL, "%rsp", $STACK_LOCAL_OFFSET, (32 * 16),
-    "%rsp", &HashKeyOffsetByIdx(16, "frame"),
+    $GCM128_CTX, &HashKeyOffsetByIdx(16),
     0, $AAD_HASHz, $ZTMP0, $ZTMP1, $ZTMP2, $ZTMP3, $ZTMP4, $ZTMP5, $ZTMP6, $ZTMP7, $ZTMP8, $ZTMP9);
 
   # ;; ==== GHASH 1 x 16 blocks with reduction + cipher and ghash on the reminder
@@ -3849,7 +3835,7 @@ ___
   $code .= "mov               @{[DWORD($LENGTH)]},@{[DWORD($IA0)]}\n";
   $code .= <<___;
         and               \$~15,@{[DWORD($IA0)]}
-        mov               \$`@{[HashKeyOffsetByIdx(16,"frame")]}`,@{[DWORD($HASHK_PTR)]}
+        mov               \$`@{[HashKeyOffsetByIdx(16)]}`,@{[DWORD($HASHK_PTR)]}
         sub               @{[DWORD($IA0)]},@{[DWORD($HASHK_PTR)]}
 ___
   &GCM_ENC_DEC_LAST(
@@ -3890,7 +3876,7 @@ ___
   # ;; ==== GHASH 1 x 16 blocks
   &GHASH_16(
     "mid", $GH, $GM, $GL, "%rsp", $STACK_LOCAL_OFFSET, (16 * 16),
-    "%rsp", &HashKeyOffsetByIdx(32, "frame"),
+    $GCM128_CTX, &HashKeyOffsetByIdx(32),
     0, "no_hash_input", $ZTMP0, $ZTMP1, $ZTMP2, $ZTMP3, $ZTMP4, $ZTMP5, $ZTMP6, $ZTMP7, $ZTMP8, $ZTMP9);
 
   # ;; ==== GHASH 1 x 16 blocks with reduction + cipher and ghash on the reminder
@@ -3902,7 +3888,7 @@ ___
   &GCM_ENC_DEC_LAST(
     $AES_KEYS,    $GCM128_CTX, $CIPH_PLAIN_OUT, $PLAIN_CIPH_IN,
     $DATA_OFFSET, $LENGTH,     $CTR_BLOCKz,     $CTR_CHECK,
-    &HashKeyOffsetByIdx(16, "frame"), $ghashin_offset, $SHUF_MASK, $ZTMP0,
+    &HashKeyOffsetByIdx(16), $ghashin_offset, $SHUF_MASK, $ZTMP0,
     $ZTMP1,       $ZTMP2,     $ZTMP3,     $ZTMP4,
     $ZTMP5,       $ZTMP6,     $ZTMP7,     $ZTMP8,
     $ZTMP9,       $ZTMP10,    $ZTMP11,    $ZTMP12,
@@ -3930,7 +3916,7 @@ ___
 
   $code .= <<___;
 and               \$~15,@{[DWORD($IA0)]}
-mov               \$`@{[HashKeyOffsetByIdx(16,"frame")]}`,@{[DWORD($HASHK_PTR)]}
+mov               \$`@{[HashKeyOffsetByIdx(16)]}`,@{[DWORD($HASHK_PTR)]}
 sub               @{[DWORD($IA0)]},@{[DWORD($HASHK_PTR)]}
 ___
 
