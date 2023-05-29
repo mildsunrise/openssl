@@ -489,106 +489,6 @@ sub clear_scratch_gps_asm {
   }
 }
 
-sub precompute_hkeys_on_stack {
-  my $GCM128_CTX  = $_[0];
-  my $HKEYS_READY = $_[1];
-  my $ZTMP0       = $_[2];
-  my $ZTMP1       = $_[3];
-  my $ZTMP2       = $_[4];
-  my $ZTMP3       = $_[5];
-  my $ZTMP4       = $_[6];
-  my $ZTMP5       = $_[7];
-  my $ZTMP6       = $_[8];
-  my $HKEYS_RANGE = $_[9];    # ; "first16", "mid16", "all", "first32", "last32"
-
-  die "precompute_hkeys_on_stack: Unexpected value of HKEYS_RANGE: $HKEYS_RANGE"
-    if ($HKEYS_RANGE ne "first16"
-    && $HKEYS_RANGE ne "mid16"
-    && $HKEYS_RANGE ne "all"
-    && $HKEYS_RANGE ne "first32"
-    && $HKEYS_RANGE ne "last32");
-
-  my $rndsuffix = &random_string();
-
-  $code .= <<___;
-        test              $HKEYS_READY,$HKEYS_READY
-        jnz               .L_skip_hkeys_precomputation_${rndsuffix}
-___
-
-  if ($HKEYS_RANGE eq "first16" || $HKEYS_RANGE eq "first32" || $HKEYS_RANGE eq "all") {
-
-    # ; Fill the stack with the first 16 hkeys from the context
-    $code .= <<___;
-        # ; Move 16 hkeys from the context to stack
-        vmovdqu64         @{[HashKeyByIdx(4,$GCM128_CTX)]},$ZTMP0
-        vmovdqu64         $ZTMP0,@{[HashKeyByIdx(4,"%rsp")]}
-
-        vmovdqu64         @{[HashKeyByIdx(8,$GCM128_CTX)]},$ZTMP1
-        vmovdqu64         $ZTMP1,@{[HashKeyByIdx(8,"%rsp")]}
-
-        # ; broadcast HashKey^8
-        vshufi64x2        \$0x00,$ZTMP1,$ZTMP1,$ZTMP1
-
-        vmovdqu64         @{[HashKeyByIdx(12,$GCM128_CTX)]},$ZTMP2
-        vmovdqu64         $ZTMP2,@{[HashKeyByIdx(12,"%rsp")]}
-
-        vmovdqu64         @{[HashKeyByIdx(16,$GCM128_CTX)]},$ZTMP3
-        vmovdqu64         $ZTMP3,@{[HashKeyByIdx(16,"%rsp")]}
-___
-  }
-
-  if ($HKEYS_RANGE eq "mid16" || $HKEYS_RANGE eq "last32") {
-    $code .= <<___;
-        vmovdqu64         @{[HashKeyByIdx(8,"%rsp")]},$ZTMP1
-
-        # ; broadcast HashKey^8
-        vshufi64x2        \$0x00,$ZTMP1,$ZTMP1,$ZTMP1
-
-        vmovdqu64         @{[HashKeyByIdx(12,"%rsp")]},$ZTMP2
-        vmovdqu64         @{[HashKeyByIdx(16,"%rsp")]},$ZTMP3
-___
-
-  }
-
-  if ($HKEYS_RANGE eq "mid16" || $HKEYS_RANGE eq "first32" || $HKEYS_RANGE eq "last32" || $HKEYS_RANGE eq "all") {
-
-    # ; Precompute hkeys^i, i=17..32
-    my $i = 20;
-    foreach (1 .. int((32 - 16) / 8)) {
-
-      # ;; compute HashKey^(4 + n), HashKey^(3 + n), ... HashKey^(1 + n)
-      &GHASH_MUL($ZTMP2, $ZTMP1, $ZTMP4, $ZTMP5, $ZTMP6);
-      $code .= "vmovdqu64         $ZTMP2,@{[HashKeyByIdx($i,\"%rsp\")]}\n";
-      $i += 4;
-
-      # ;; compute HashKey^(8 + n), HashKey^(7 + n), ... HashKey^(5 + n)
-      &GHASH_MUL($ZTMP3, $ZTMP1, $ZTMP4, $ZTMP5, $ZTMP6);
-      $code .= "vmovdqu64         $ZTMP3,@{[HashKeyByIdx($i,\"%rsp\")]}\n";
-      $i += 4;
-    }
-  }
-
-  if ($HKEYS_RANGE eq "last32" || $HKEYS_RANGE eq "all") {
-
-    # ; Precompute hkeys^i, i=33..48 (HKEYS_STORAGE_CAPACITY = 48)
-    my $i = 36;
-    foreach (1 .. int((48 - 32) / 8)) {
-
-      # ;; compute HashKey^(4 + n), HashKey^(3 + n), ... HashKey^(1 + n)
-      &GHASH_MUL($ZTMP2, $ZTMP1, $ZTMP4, $ZTMP5, $ZTMP6);
-      $code .= "vmovdqu64         $ZTMP2,@{[HashKeyByIdx($i,\"%rsp\")]}\n";
-      $i += 4;
-
-      # ;; compute HashKey^(8 + n), HashKey^(7 + n), ... HashKey^(5 + n)
-      &GHASH_MUL($ZTMP3, $ZTMP1, $ZTMP4, $ZTMP5, $ZTMP6);
-      $code .= "vmovdqu64         $ZTMP3,@{[HashKeyByIdx($i,\"%rsp\")]}\n";
-      $i += 4;
-    }
-  }
-
-  $code .= ".L_skip_hkeys_precomputation_${rndsuffix}:\n";
-}
-
 # ;; =============================================================================
 # ;; Generic macro to produce code that executes $OPCODE instruction
 # ;; on selected number of AES blocks (16 bytes long ) between 0 and 16.
@@ -1388,8 +1288,6 @@ sub CALC_AAD_HASH {
   my $T3         = $_[23];    # [clobbered] GP register
   my $MASKREG    = $_[24];    # [clobbered] mask register
 
-  my $HKEYS_READY = "%rbx";
-
   my $SHFMSK = $ZT13;
 
   my $rndsuffix = &random_string();
@@ -1400,7 +1298,6 @@ sub CALC_AAD_HASH {
         or                $T2,$T2
         jz                .L_CALC_AAD_done_${rndsuffix}
 
-        xor               $HKEYS_READY,$HKEYS_READY
         vmovdqa64         SHUF_MASK(%rip),$SHFMSK
 
 .L_get_AAD_loop48x16_${rndsuffix}:
@@ -1418,9 +1315,6 @@ ___
         vpshufb           $SHFMSK,$ZT3,$ZT3
         vpshufb           $SHFMSK,$ZT4,$ZT4
 ___
-
-  &precompute_hkeys_on_stack($GCM128_CTX, $HKEYS_READY, $ZT0, $ZT8, $ZT9, $ZT10, $ZT11, $ZT12, $ZT14, "all");
-  $code .= "mov     \$1,$HKEYS_READY\n";
 
   &GHASH_16(
     "start",        $ZT5,           $ZT6,           $ZT7,
@@ -1495,9 +1389,6 @@ ___
         vpshufb           $SHFMSK,$ZT3,$ZT3
         vpshufb           $SHFMSK,$ZT4,$ZT4
 ___
-
-  &precompute_hkeys_on_stack($GCM128_CTX, $HKEYS_READY, $ZT0, $ZT8, $ZT9, $ZT10, $ZT11, $ZT12, $ZT14, "first32");
-  $code .= "mov     \$1,$HKEYS_READY\n";
 
   &GHASH_16(
     "start",        $ZT5,           $ZT6,           $ZT7,
@@ -3636,8 +3527,6 @@ sub GCM_ENC_DEC {
   my $DATA_OFFSET = $IA4;
   my $HASHK_PTR   = $IA6;
 
-  my $HKEYS_READY = $IA7;
-
   my $CTR_BLOCKz = "%zmm2";
   my $CTR_BLOCKx = "%xmm2";
 
@@ -3730,7 +3619,6 @@ sub GCM_ENC_DEC {
   # Length value from context $CTX_OFFSET_InLen`($GCM128_CTX) is updated in
   # 'providers/implementations/ciphers/cipher_aes_gcm_hw_vaes_avx512.inc'
 
-  $code .= "xor                $HKEYS_READY, $HKEYS_READY\n";
   $code .= "vmovdqu64         `$CTX_OFFSET_AadHash`($GCM128_CTX),$AAD_HASHx\n";
 
   # ;; Used for the update flow - if there was a previous partial
@@ -3784,9 +3672,6 @@ ___
     $ZTMP3,         $ZTMP4,          $ZTMP5,         $ZTMP6,              $ZTMP7,     $ZTMP8,
     $SHUF_MASK,     $ENC_DEC,        $aesout_offset, $data_in_out_offset, $IA0);
 
-  &precompute_hkeys_on_stack($GCM128_CTX, $HKEYS_READY, $ZTMP0, $ZTMP1, $ZTMP2, $ZTMP3, $ZTMP4, $ZTMP5, $ZTMP6,
-    "first16");
-
   $code .= <<___;
         cmp               \$`(32 * 16)`,$LENGTH
         jb                .L_message_below_32_blocks_${rndsuffix}
@@ -3800,10 +3685,6 @@ ___
     $CTR_CHECK,     $ADDBE_4x4,      $ADDBE_1234,    $ZTMP0,              $ZTMP1,     $ZTMP2,
     $ZTMP3,         $ZTMP4,          $ZTMP5,         $ZTMP6,              $ZTMP7,     $ZTMP8,
     $SHUF_MASK,     $ENC_DEC,        $aesout_offset, $data_in_out_offset, $IA0);
-
-  &precompute_hkeys_on_stack($GCM128_CTX, $HKEYS_READY, $ZTMP0, $ZTMP1, $ZTMP2, $ZTMP3, $ZTMP4, $ZTMP5, $ZTMP6,
-    "last32");
-  $code .= "mov     \$1,$HKEYS_READY\n";
 
   $code .= <<___;
         add               \$`(32 * 16)`,$DATA_OFFSET
@@ -4045,10 +3926,6 @@ ___
 
   # ;; calculate offset to the right hash key
   $code .= "mov               @{[DWORD($LENGTH)]},@{[DWORD($IA0)]}\n";
-
-  &precompute_hkeys_on_stack($GCM128_CTX, $HKEYS_READY, $ZTMP0, $ZTMP1, $ZTMP2, $ZTMP3, $ZTMP4, $ZTMP5, $ZTMP6,
-    "mid16");
-  $code .= "mov     \$1,$HKEYS_READY\n";
 
   $code .= <<___;
 and               \$~15,@{[DWORD($IA0)]}
