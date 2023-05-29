@@ -29,11 +29,6 @@ srand(1993317324);
 #
 # Initial release.
 #
-# GCM128_CONTEXT structure has storage for 16 hkeys only, but this
-# implementation can use up to 48.  To avoid extending the context size,
-# precompute and store in the context first 16 hkeys only, and compute the rest
-# on demand keeping them in the local frame.
-#
 #======================================================================
 # $output is the last argument if it looks like a file (it has an extension)
 # $flavour is the first argument if it doesn't look like a file
@@ -114,9 +109,6 @@ my %aes_rounds = (
 # ; Disabled due to performance reasons.
 my $CLEAR_SCRATCH_REGISTERS = 0;
 
-# ; Zero HKeys storage from the stack if they are stored there
-my $CLEAR_HKEYS_STORAGE_ON_EXIT = 1;
-
 # ; Enable / disable check of function arguments for null pointer
 # ; Currently disabled, as this check is handled outside.
 my $CHECK_FUNCTION_ARGUMENTS = 0;
@@ -131,7 +123,7 @@ my $AES_BLOCK_SIZE = 16;
 # Storage capacity in elements
 my $HKEYS_STORAGE_CAPACITY = 48;
 my $LOCAL_STORAGE_CAPACITY = 48;
-my $HKEYS_CONTEXT_CAPACITY = 16;
+my $HKEYS_CONTEXT_CAPACITY = 48;
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;; Stack frame definition
@@ -143,16 +135,13 @@ my $HKEYS_CONTEXT_CAPACITY = 16;
 # (4) -> +160-byte XMM storage (Windows only, zero on Linux)
 # (5) -> +48-byte space for 64-byte alignment of %RSP from p.8
 # (6) -> +768-byte LOCAL storage (optional, can be omitted in some functions)
-# (7) -> +768-byte HKEYS storage
 # (8) -> Stack pointer (%RSP) aligned on 64-byte boundary
 
 my $GP_STORAGE  = $win64 ? 8 * 8     : 8 * 6;    # ; space for saved non-volatile GP registers (pushed on stack)
 my $XMM_STORAGE = $win64 ? (10 * 16) : 0;        # ; space for saved XMM registers
-my $HKEYS_STORAGE = ($HKEYS_STORAGE_CAPACITY * $AES_BLOCK_SIZE);    # ; space for HKeys^i, i=1..48
 my $LOCAL_STORAGE = ($LOCAL_STORAGE_CAPACITY * $AES_BLOCK_SIZE);    # ; space for up to 48 AES blocks
 
-my $STACK_HKEYS_OFFSET = 0;
-my $STACK_LOCAL_OFFSET = ($STACK_HKEYS_OFFSET + $HKEYS_STORAGE);
+my $STACK_LOCAL_OFFSET = 0;
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;; Function arguments abstraction
@@ -198,7 +187,7 @@ my $CTX_OFFSET_EK0       = (16 * 2);          #  ; (EK0) Encrypted Y0 counter (s
 my $CTX_OFFSET_AadLen    = (16 * 3);          #  ; (len.u[0]) Length of Hash which has been input
 my $CTX_OFFSET_InLen     = ((16 * 3) + 8);    #  ; (len.u[1]) Length of input data which will be encrypted or decrypted
 my $CTX_OFFSET_AadHash   = (16 * 4);          #  ; (Xi) Current hash
-my $CTX_OFFSET_HTable    = (16 * 6);          #  ; (Htable) Precomputed table (allows 16 values)
+my $CTX_OFFSET_HTable    = (16 * 6);          #  ; (Htable) Precomputed table (allows 48 values)
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;; Helper functions
@@ -326,19 +315,12 @@ sub HashKeyOffsetByIdx {
 # ; Creates local frame and does back up of non-volatile registers.
 # ; Holds stack unwinding directives.
 sub PROLOG {
-  my ($need_hkeys_stack_storage, $need_aes_stack_storage, $func_name) = @_;
+  my ($need_aes_stack_storage, $func_name) = @_;
 
   my $DYNAMIC_STACK_ALLOC_SIZE            = 0;
   my $DYNAMIC_STACK_ALLOC_ALIGNMENT_SPACE = $win64 ? 48 : 52;
 
-  if ($need_hkeys_stack_storage) {
-    $DYNAMIC_STACK_ALLOC_SIZE += $HKEYS_STORAGE;
-  }
-
   if ($need_aes_stack_storage) {
-    if (!$need_hkeys_stack_storage) {
-      die "PROLOG: unsupported case - aes storage without hkeys one";
-    }
     $DYNAMIC_STACK_ALLOC_SIZE += $LOCAL_STORAGE;
   }
 
@@ -419,24 +401,9 @@ ___
 # ;;; And cleanup stack.
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 sub EPILOG {
-  my ($hkeys_storage_on_stack, $payload_len) = @_;
+  my ($payload_len) = @_;
 
   my $rndsuffix = &random_string();
-
-  if ($hkeys_storage_on_stack && $CLEAR_HKEYS_STORAGE_ON_EXIT) {
-
-    # ; There is no need in hkeys cleanup if payload len was small, i.e. no hkeys
-    # ; were stored in the local frame storage
-    $code .= <<___;
-        cmpq              \$`16*16`,$payload_len
-        jbe               .Lskip_hkeys_cleanup_${rndsuffix}
-        vpxor             %xmm0,%xmm0,%xmm0
-___
-    for (my $i = 0; $i < int($HKEYS_STORAGE / 64); $i++) {
-      $code .= "vmovdqa64         %zmm0,`$STACK_HKEYS_OFFSET + 64*$i`(%rsp)\n";
-    }
-    $code .= ".Lskip_hkeys_cleanup_${rndsuffix}:\n";
-  }
 
   if ($CLEAR_SCRATCH_REGISTERS) {
     &clear_scratch_gps_asm();
@@ -1341,18 +1308,21 @@ ___
         vshufi64x2        \$0x00,$ZT5,$ZT5,$ZT4                 # ;; broadcast HashKey^8 across all ZT4
 ___
 
-  # ;; calculate HashKey^9<<1 mod poly, HashKey^10<<1 mod poly, ... HashKey^16<<1 mod poly
+  # ;; calculate HashKey^9<<1 mod poly, HashKey^10<<1 mod poly, ... HashKey^48<<1 mod poly
   # ;; use HashKey^8 as multiplier against ZT6 and ZT5 - this allows deeper ooo execution
 
-  # ;; compute HashKey^(12), HashKey^(11), ... HashKey^(9)
-  &GHASH_MUL($ZT6, $ZT4, $ZT1, $ZT2, $ZT3);
-  $code .= "vmovdqu64         $ZT6,@{[HashKeyByIdx(12,$GCM128_CTX)]}\n";
+  my $i = 12;
+  foreach (1 .. int((48 - 8) / 8)) {
+    # ;; compute HashKey^(4 + n), HashKey^(3 + n), ... HashKey^(1 + n)
+    &GHASH_MUL($ZT6, $ZT4, $ZT1, $ZT2, $ZT3);
+    $code .= "vmovdqu64         $ZT6,@{[HashKeyByIdx($i,$GCM128_CTX)]}\n";
+    $i += 4;
 
-  # ;; compute HashKey^(16), HashKey^(15), ... HashKey^(13)
-  &GHASH_MUL($ZT5, $ZT4, $ZT1, $ZT2, $ZT3);
-  $code .= "vmovdqu64         $ZT5,@{[HashKeyByIdx(16,$GCM128_CTX)]}\n";
-
-  # ; Hkeys 17..48 will be precomputed somewhere else as context can hold only 16 hkeys
+    # ;; compute HashKey^(8 + n), HashKey^(7 + n), ... HashKey^(5 + n)
+    &GHASH_MUL($ZT5, $ZT4, $ZT1, $ZT2, $ZT3);
+    $code .= "vmovdqu64         $ZT5,@{[HashKeyByIdx($i,$GCM128_CTX)]}\n";
+    $i += 4;
+  }
 }
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4414,7 +4384,6 @@ ___
 
 # ; NOTE: code before PROLOG() must not modify any registers
 &PROLOG(
-  1,    # allocate stack space for hkeys
   0,    # do not allocate stack space for AES blocks
   "setiv");
 &GCM_INIT_IV(
@@ -4422,7 +4391,6 @@ ___
   "%zmm11", "%zmm3",  "%zmm4",  "%zmm5",  "%zmm6",  "%zmm7", "%zmm8", "%zmm9", "%zmm10", "%zmm12",
   "%zmm13", "%zmm15", "%zmm16", "%zmm17", "%zmm18", "%zmm19");
 &EPILOG(
-  1,    # hkeys were allocated
   $arg4);
 $code .= <<___;
 .Labort_setiv:
@@ -4467,7 +4435,6 @@ ___
 
 # ; NOTE: code before PROLOG() must not modify any registers
 &PROLOG(
-  1,    # allocate stack space for hkeys,
   0,    # do not allocate stack space for AES blocks
   "ghash");
 &GCM_UPDATE_AAD(
@@ -4475,7 +4442,6 @@ ___
   "%zmm3",  "%zmm4",  "%zmm5",  "%zmm6",  "%zmm7", "%zmm8", "%zmm9", "%zmm10", "%zmm12", "%zmm13",
   "%zmm15", "%zmm16", "%zmm17", "%zmm18", "%zmm19");
 &EPILOG(
-  1,    # hkeys were allocated
   $arg3);
 $code .= <<___;
 .Lexit_update_aad:
@@ -4509,7 +4475,6 @@ ___
 
 # ; NOTE: code before PROLOG() must not modify any registers
 &PROLOG(
-  1,    # allocate stack space for hkeys
   1,    # allocate stack space for AES blocks
   "encrypt");
 if ($CHECK_FUNCTION_ARGUMENTS) {
@@ -4562,7 +4527,7 @@ ___
   $code .= "jmp .Lexit_gcm_encrypt\n";
 }
 $code .= ".Lexit_gcm_encrypt:\n";
-&EPILOG(1, $arg5);
+&EPILOG($arg5);
 $code .= <<___;
 ret
 .Lencrypt_seh_end:
@@ -4594,7 +4559,6 @@ ___
 
 # ; NOTE: code before PROLOG() must not modify any registers
 &PROLOG(
-  1,    # allocate stack space for hkeys
   1,    # allocate stack space for AES blocks
   "decrypt");
 if ($CHECK_FUNCTION_ARGUMENTS) {
@@ -4647,7 +4611,7 @@ ___
   $code .= "jmp .Lexit_gcm_decrypt\n";
 }
 $code .= ".Lexit_gcm_decrypt:\n";
-&EPILOG(1, $arg5);
+&EPILOG($arg5);
 $code .= <<___;
 ret
 .Ldecrypt_seh_end:
