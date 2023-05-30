@@ -1,3 +1,7 @@
+# seed prng to make the produced source code deterministic
+# and less likely to yield huge diffs
+srand(1993317324);
+
 # Copyright 2021-2022 The OpenSSL Project Authors. All Rights Reserved.
 # Copyright (c) 2021, Intel Corporation. All Rights Reserved.
 #
@@ -80,12 +84,12 @@ open OUT, "| \"$^X\" \"$xlate\" $flavour \"$output\""
 if ($avx512vaes>0) { #<<<
 
 $code .= <<___;
-.extern OPENSSL_ia32cap_P
+.extern AesGcmSrtpBackend_ia32cap_P
 .globl  AesGcmSrtpBackend_asm_vpclmulqdq_capable
 .type   AesGcmSrtpBackend_asm_vpclmulqdq_capable,\@abi-omnipotent
 .align 32
 AesGcmSrtpBackend_asm_vpclmulqdq_capable:
-    mov OPENSSL_ia32cap_P+8(%rip), %rcx
+    mov AesGcmSrtpBackend_ia32cap_P+8(%rip), %rcx
     # avx512vpclmulqdq + avx512vaes + avx512vl + avx512bw + avx512dq + avx512f
     mov \$`1<<42|1<<41|1<<31|1<<30|1<<17|1<<16`,%rdx
     xor %eax,%eax
